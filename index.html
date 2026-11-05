@@ -1,4 +1,4 @@
-<!-- 파일명: index.html | @version 1.4.0 -->
+<!-- 파일명: index.html | @version 1.5.0 -->
 <!doctype html>
 <html lang="ko">
 <head>
@@ -43,6 +43,8 @@
   .stage .msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff; padding: 24px; font-size: 15px; line-height: 1.5; }
   .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
   .thumbs div { aspect-ratio: 466/690; background: var(--line); border-radius: 6px; overflow: hidden; }
+  .thumbs div { cursor: pointer; }
+  .thumbs div.sel { outline: 3px solid var(--accent2); outline-offset: 1px; }
   .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .row + .row { margin-top: 10px; }
@@ -78,7 +80,7 @@
 </head>
 <body>
 <main>
-  <h1><img id="hdrLogo" alt="혜원여자중학교 교표"><span id="hdrTitle"><small>HYEWON GIRLS' MIDDLE SCHOOL</small>혜원 네 컷</span><em class="ver">v1.4.0</em></h1>
+  <h1><img id="hdrLogo" alt="혜원여자중학교 교표"><span id="hdrTitle"><small>HYEWON GIRLS' MIDDLE SCHOOL</small>혜원 네 컷</span><em class="ver">v1.5.0</em></h1>
 
   <section id="boothSec">
     <div class="card notice">
@@ -134,9 +136,9 @@
       <div id="fields" hidden></div>
       <div class="row" id="shootRow">
         <button class="btn" id="flipBtn" type="button">🔄 카메라 전환</button>
-        <button class="btn primary" id="shootBtn" type="button" disabled>🎬 촬영 시작</button>
+        <button class="btn primary" id="shootBtn" type="button" disabled>📸 1번째 컷 찍기</button>
       </div>
-      <p class="hint" id="shootHint">3초 카운트다운 후 자동으로 4장을 찍고, 촬영 과정은 영상으로 함께 저장돼요.</p>
+      <p class="hint" id="shootHint">한 컷씩 찍어요. 버튼을 누르면 3초 뒤에 찍혀요. 아래 작은 사진을 누르면 그 컷만 다시 찍을 수 있어요.</p>
     </div>
   </section>
 
@@ -201,7 +203,7 @@
   const HW_GREEN = '#11803f', HW_RED = '#d3202c';
 
   // 버전 바닥글: 제목은 머리글 제목을 따라온다
-  const APP_VER = 'v1.4.0', APP_DEPLOYED = '2026-11-05 23:46 (KST)';
+  const APP_VER = 'v1.5.0', APP_DEPLOYED = '2026-11-05 23:46 (KST)';
   const ht = $('hdrTitle');
   const footTitle = () => (ht.lastChild && ht.lastChild.textContent.trim()) || document.title;
   const paintFoot = () => { $('ftLine').textContent = `${footTitle()} · ${APP_VER} · 배포 ${APP_DEPLOYED}`; };
@@ -242,7 +244,7 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(values)); } catch (e) { /* 저장소를 못 쓰는 경우 */ }
   }
 
-  const state = { facing: 'user', deviceId: '', filter: 'none', stream: null, shooting: false, count: 0, shotNo: 0, flashAt: 0, photos: [], strip: null, filmBlob: null, stripBlob: null, mode: 'shoot', loaded: [null, null, null, null], pick: null };
+  const state = { facing: 'user', deviceId: '', filter: 'none', stream: null, shooting: false, count: 0, shotNo: 0, flashAt: 0, photos: [], strip: null, filmBlob: null, stripBlob: null, rec: null, redo: null, mode: 'shoot', loaded: [null, null, null, null], pick: null };
 
   // ---------- filters ----------
   // 미리보기와 찍힌 사진에 모두 적용된다 (canvas filter 를 지원하는 브라우저에서)
@@ -265,6 +267,7 @@
         video: Object.assign({ width: { ideal: 1280 }, height: { ideal: 960 } },
           state.deviceId ? { deviceId: { exact: state.deviceId } } : { facingMode: state.facing }), audio: false,
       });
+      { const fm = state.stream.getVideoTracks()[0].getSettings().facingMode; if (fm) state.facing = fm; else if (state.deviceId) state.facing = 'user'; }
       await listCameras();
       video.srcObject = state.stream;
       await video.play();
@@ -374,32 +377,49 @@
   // ---------- shooting ----------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // 한 컷씩 찍는다: 버튼을 누르면 3초 뒤 1장. 작은 사진 칸을 누르면 그 컷만 다시 찍는다.
+  function firstEmpty() { for (let i = 0; i < SHOTS; i++) if (!state.photos[i]) return i; return -1; }
+  function updateShootBtn() {
+    const redo = state.redo != null, idx = redo ? state.redo : Math.max(0, firstEmpty());
+    $('shootBtn').textContent = `📸 ${idx + 1}번째 컷 ${redo ? '다시 ' : ''}찍기`;
+    [...$('thumbs').children].forEach((d, i) => d.classList.toggle('sel', redo && i === state.redo));
+  }
+  function discardRec() {
+    if (state.rec) { try { state.rec.rec.stop(); } catch (e) { /* 이미 멈춤 */ } state.rec = null; }
+  }
+  function resetSession() {
+    discardRec(); state.photos = []; state.redo = null; state.shooting = false;
+    resetThumbs(); updateShootBtn();
+  }
   async function shoot() {
     if (state.shooting) return;
-    state.shooting = true; state.photos = [];
+    const idx = state.redo != null ? state.redo : firstEmpty();
+    if (idx < 0) return;
+    state.shooting = true; state.shotNo = idx + 1;
     $('shootBtn').disabled = true; $('flipBtn').disabled = true;
-    resetThumbs();
-    const recording = startRecording();
-
-    for (let i = 1; i <= SHOTS; i++) {
-      state.shotNo = i;
-      for (let c = COUNT; c >= 1; c--) { state.count = c; await sleep(1000); }
-      state.count = 0;
-      const shot = document.createElement('canvas');
-      shot.width = W; shot.height = H;
-      drawVideo(shot.getContext('2d'), W, H);
-      state.photos.push(shot);
-      state.flashAt = performance.now();
-      addThumb(shot, i - 1);
-      await sleep(900);
-    }
+    if (!state.rec) state.rec = startRecording();
+    else if (state.rec.rec.state === 'paused') state.rec.rec.resume();
+    for (let c = COUNT; c >= 1; c--) { state.count = c; await sleep(1000); }
+    state.count = 0;
+    const shot = document.createElement('canvas');
+    shot.width = W; shot.height = H;
+    drawVideo(shot.getContext('2d'), W, H);
+    state.photos[idx] = shot; state.redo = null;
+    state.flashAt = performance.now();
+    addThumb(shot, idx);
+    await sleep(700);
     state.shooting = false;
-    await sleep(300);
-    let film = null;
-    if (recording) { recording.rec.stop(); film = await recording.done; }
-    state.filmBlob = film;
-    await buildStrip();
-    showResult();
+    if (firstEmpty() < 0) {                       // 4장이 모두 찼다 → 결과로
+      await sleep(300);
+      let film = null;
+      if (state.rec) { const r = state.rec; state.rec = null; r.rec.stop(); film = await r.done; }
+      state.filmBlob = film;
+      await buildStrip();
+      showResult();
+    } else {                                      // 다음 컷 준비 (영상은 잠시 멈춘다)
+      if (state.rec && state.rec.rec.state === 'recording') { try { state.rec.rec.pause(); } catch (e) { /* 지원 안 함 */ } }
+      $('shootBtn').disabled = false; $('flipBtn').disabled = false; updateShootBtn();
+    }
   }
 
   // ---------- compose ----------
@@ -407,7 +427,7 @@
   function addThumb(canvas, idx) {
     const img = document.createElement('img');
     img.src = canvas.toDataURL('image/jpeg', 0.7);
-    $('thumbs').children[idx].appendChild(img);
+    const box = $('thumbs').children[idx]; box.innerHTML = ''; box.appendChild(img);
   }
 
   function roundRectPath(g, x, y, w, h, r) {
@@ -641,6 +661,12 @@
   $('guide').style.width = ((CW / CH) / (W / H) * 100) + '%';
 
   $('shootBtn').onclick = shoot;
+  $('thumbs').onclick = (e) => {
+    if (state.shooting) return;
+    const i = [...$('thumbs').children].indexOf(e.target.closest('#thumbs > div'));
+    if (i < 0 || !state.photos[i]) return;
+    state.redo = state.redo === i ? null : i; updateShootBtn();
+  };
   $('flipBtn').onclick = () => { state.deviceId = ''; state.facing = state.facing === 'user' ? 'environment' : 'user'; startCamera(); };
   $('savePhoto').onclick = () => download(state.stripBlob, 'four-cut.png');
   $('saveFilm').onclick = () => state.filmBlob && download(state.filmBlob, `making-film.${ext(state.filmBlob)}`);
@@ -648,7 +674,7 @@
   $('retakeBtn').onclick = () => {
     stopHost();
     $('resultSec').classList.remove('on'); $('boothSec').hidden = false;
-    if (state.mode === 'shoot') { resetThumbs(); $('flipBtn').disabled = false; startCamera(); }
+    if (state.mode === 'shoot') { resetSession(); $('flipBtn').disabled = false; startCamera(); }
     else { state.loaded = [null, null, null, null]; paintSlots(); }
   };
 
@@ -660,7 +686,7 @@
     $('shootCard').hidden = !shoot; $('loadCard').hidden = shoot;
     $('shootRow').hidden = !shoot; $('shootHint').hidden = !shoot;
     $('modeShoot').classList.toggle('on', shoot); $('modeLoad').classList.toggle('on', !shoot);
-    if (shoot) { startCamera(); } else { stopCamera(); $('camRow').hidden = true; paintSlots(); }
+    if (shoot) { startCamera(); } else { discardRec(); stopCamera(); $('camRow').hidden = true; paintSlots(); }
   }
   function paintSlots() {
     slotsBox.innerHTML = '';
