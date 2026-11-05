@@ -273,9 +273,26 @@
     const curId = cur && cur.getSettings().deviceId;
     const box = $('cams'); box.innerHTML = '';
     $('camRow').hidden = devs.length < 2;
+    // 카메라 이름을 한글로 (기기가 영어로 알려 주는 이름을 바꾼다)
+    const koCam = (label, i) => {
+      const l = (label || '').toLowerCase();
+      if (!l) return '카메라 ' + (i + 1);
+      const side = /front|user|face time|facetime|selfie/.test(l) ? '전면' : /back|rear|environment/.test(l) ? '후면' : '';
+      let kind = '';
+      if (/ultra.?wide/.test(l)) kind = ' 초광각'; else if (/tele/.test(l)) kind = ' 망원'; else if (/wide/.test(l)) kind = ' 광각';
+      if (/triple/.test(l)) kind += ' 트리플'; else if (/dual/.test(l)) kind += ' 듀얼';
+      if (side) return side + kind + ' 카메라';
+      if (/integrated|built-in|internal|hd camera|hd webcam|laptop/.test(l)) return '내장 카메라';
+      if (/usb|webcam|web cam/.test(l)) return 'USB 웹캠';
+      if (/virtual|obs|capture/.test(l)) return '가상 카메라';
+      return '카메라 ' + (i + 1);
+    };
+    const names = devs.map((d, i) => koCam(d.label, i));
     devs.forEach((d, i) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.textContent = '📷 ' + (d.label ? d.label.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)/i, '') : '카메라 ' + (i + 1));
+      const same = names.filter((n) => n === names[i]).length > 1;
+      const nth = names.slice(0, i + 1).filter((n) => n === names[i]).length;
+      b.type = 'button'; b.textContent = '📷 ' + names[i] + (same ? ' ' + nth : '');
       b.className = d.deviceId === curId ? 'on' : '';
       b.onclick = () => { state.deviceId = d.deviceId; startCamera(); };
       box.appendChild(b);
