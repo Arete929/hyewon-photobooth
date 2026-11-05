@@ -1,4 +1,4 @@
-<!-- 파일명: index.html | @version 1.5.0 -->
+<!-- 파일명: index.html | @version 1.6.0 -->
 <!doctype html>
 <html lang="ko">
 <head>
@@ -75,12 +75,27 @@
   .slots button.full { border-style: solid; border-color: var(--accent); }
   .slots button i { position: absolute; left: 6px; top: 6px; z-index: 1; font-style: normal; font-size: 12px; font-weight: 800; color: #fff; background: var(--accent); border-radius: 999px; padding: 2px 8px; }
   button.btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #fsView { position: fixed; inset: 0; z-index: 200; background: #0b1410; color: #fff; display: flex; align-items: center; justify-content: center; gap: 5vw; padding: 3vh 3vw; }
+  #fsView[hidden] { display: none !important; }
+  #fsImg { height: 94vh; width: auto; max-width: 46vw; object-fit: contain; border-radius: 10px; box-shadow: 0 6px 30px rgba(0,0,0,.5); margin: 0 !important; }
+  #fsView .fsq { display: flex; flex-direction: column; align-items: center; gap: 2vh; text-align: center; max-width: 44vw; }
+  #fsQr svg { width: min(62vh, 38vw); height: auto; display: block; background: #fff; padding: 2.4vh; border-radius: 14px; }
+  #fsMsg { margin: 0; font-size: clamp(18px, 3.4vh, 34px); font-weight: 700; }
+  #fsSub { margin: 0; font-size: clamp(13px, 2.2vh, 20px); color: #b9cbbf; line-height: 1.5; }
+  #fsView .btn { flex: 0 0 auto; padding: 1.6vh 3vw; font-size: clamp(15px, 2.4vh, 22px); }
+  #fsClose { position: absolute; top: 2vh; right: 2vw; background: rgba(255,255,255,.14); color: #fff; border: 0; border-radius: 999px; padding: 1vh 1.6vw; font-size: clamp(13px, 2vh, 18px); cursor: pointer; font-family: inherit; }
+  @media (orientation: portrait) {
+    #fsView { flex-direction: column; gap: 2vh; padding: 6vh 4vw 3vh; }
+    #fsImg { height: 46vh; max-width: 92vw; }
+    #fsView .fsq { max-width: 92vw; }
+    #fsQr svg { width: min(34vh, 78vw); }
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
-  <h1><img id="hdrLogo" alt="혜원여자중학교 교표"><span id="hdrTitle"><small>HYEWON GIRLS' MIDDLE SCHOOL</small>혜원 네 컷</span><em class="ver">v1.5.0</em></h1>
+  <h1><img id="hdrLogo" alt="혜원여자중학교 교표"><span id="hdrTitle"><small>HYEWON GIRLS' MIDDLE SCHOOL</small>혜원 네 컷</span><em class="ver">v1.6.0</em></h1>
 
   <section id="boothSec">
     <div class="card notice">
@@ -143,6 +158,9 @@
   </section>
 
   <section class="result card" id="resultSec">
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn primary" id="fsBtn" type="button">🖥 공유 전체화면 (사진 + QR)</button>
+    </div>
     <img id="stripImg" alt="완성된 네컷 사진">
     <video id="filmVid" controls playsinline hidden></video>
     <div class="qrbox">
@@ -174,6 +192,16 @@
       <button class="btn" id="recvRetry" type="button">🔁 다시 연결</button>
     </div>
   </section>
+  <div id="fsView" hidden>
+    <button id="fsClose" type="button">✕ 닫기 (Esc)</button>
+    <img id="fsImg" alt="완성된 네컷 사진">
+    <div class="fsq">
+      <div id="fsQr"></div>
+      <p id="fsMsg"></p>
+      <p id="fsSub"></p>
+      <button class="btn primary" id="fsRetake" type="button">↩ 다시하기</button>
+    </div>
+  </div>
   <footer class="appfoot"><div id="ftLine"></div><div>ⓒKIMJINHO</div></footer>
 </main>
 <script src="vendor/peerjs.min.js"></script>
@@ -203,7 +231,7 @@
   const HW_GREEN = '#11803f', HW_RED = '#d3202c';
 
   // 버전 바닥글: 제목은 머리글 제목을 따라온다
-  const APP_VER = 'v1.5.0', APP_DEPLOYED = '2026-11-05 23:46 (KST)';
+  const APP_VER = 'v1.6.0', APP_DEPLOYED = '2026-11-05 23:46 (KST)';
   const ht = $('hdrTitle');
   const footTitle = () => (ht.lastChild && ht.lastChild.textContent.trim()) || document.title;
   const paintFoot = () => { $('ftLine').textContent = `${footTitle()} · ${APP_VER} · 배포 ${APP_DEPLOYED}`; };
@@ -667,6 +695,31 @@
   // 사진 속 크롭 가이드: 결과 컷(세로)에 들어가는 영역을 미리보기에 표시
   $('guide').style.width = ((CW / CH) / (W / H) * 100) + '%';
 
+  // ---------- 공유 전체화면 (사진 + QR) ----------
+  const fsV = $('fsView');
+  const syncFs = () => { $('fsQr').innerHTML = $('qrImg').innerHTML; $('fsMsg').textContent = $('qrMsg').textContent; $('fsSub').textContent = $('qrSub').textContent; };
+  let fsObs = null;
+  function openFs() {
+    $('fsImg').src = $('stripImg').src; syncFs(); fsV.hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+    if (!fsObs) {   // QR 이 만들어지거나 받아 간 사람 수가 바뀌면 전체화면에도 바로 반영
+      fsObs = new MutationObserver(syncFs);
+      fsObs.observe($('qrImg'), { childList: true, subtree: true });
+      fsObs.observe($('qrMsg'), { childList: true, characterData: true, subtree: true });
+      fsObs.observe($('qrSub'), { childList: true, characterData: true, subtree: true });
+    }
+    try { const r = fsV.requestFullscreen && fsV.requestFullscreen(); if (r && r.catch) r.catch(() => { /* 전체화면을 못 켜도 화면 가득 보이게 둔다 */ }); } catch (e) { /* 지원 안 함 */ }
+  }
+  function closeFs() {
+    fsV.hidden = true; document.documentElement.style.overflow = '';
+    if (document.fullscreenElement) { try { document.exitFullscreen().catch(() => {}); } catch (e) { /* 이미 닫힘 */ } }
+  }
+  $('fsBtn').onclick = openFs;
+  $('fsClose').onclick = closeFs;
+  $('fsRetake').onclick = () => { closeFs(); $('retakeBtn').click(); };
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) { fsV.hidden = true; document.documentElement.style.overflow = ''; } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !fsV.hidden) closeFs(); });
+
   $('shootBtn').onclick = shoot;
   $('thumbs').onclick = (e) => {
     if (state.shooting) return;
@@ -679,6 +732,7 @@
   $('saveFilm').onclick = () => state.filmBlob && download(state.filmBlob, `making-film.${ext(state.filmBlob)}`);
   $('shareBtn').onclick = share;
   $('retakeBtn').onclick = () => {
+    if (!fsV.hidden) closeFs();
     stopHost();
     $('resultSec').classList.remove('on'); $('boothSec').hidden = false;
     if (state.mode === 'shoot') { resetSession(); $('flipBtn').disabled = false; startCamera(); }
