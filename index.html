@@ -65,6 +65,7 @@
   #qrSub { margin: 2px 0 0; font-size: 12px; color: var(--sub); }
   .notice { display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.55; color: var(--sub); border-left: 5px solid var(--accent); }
   .notice > b { font-size: 14px; color: var(--ink); }
+  .notice > #period { color: var(--accent2); }
   .notice span b { color: var(--accent); }
   .slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 360px; margin: 0 auto; }
   .slots button { position: relative; aspect-ratio: 466/690; border: 2px dashed var(--line); border-radius: 12px; background: var(--bg); color: var(--sub); font-size: 15px; font-weight: 600; cursor: pointer; overflow: hidden; padding: 0; }
@@ -81,6 +82,7 @@
 
   <section id="boothSec">
     <div class="card notice">
+      <b id="period" hidden></b>
       <b>🔒 사진은 서버에 저장되지 않아요</b>
       <span>찍은 사진은 이 기기 안에서만 처리돼요. 끝나면 꼭 <b>사진 저장</b>을 눌러 내 기기에 저장하고, 다음 사람을 위해 <b>다시하기</b>를 눌러 주세요.</span>
     </div>
@@ -720,7 +722,19 @@
     gate.innerHTML = '<img id="gateLogo" alt="" style="width:84px;height:84px;object-fit:contain"><div style="font-size:22px;font-weight:800">혜원 네 컷</div><div>지금은 촬영 시간이 아니에요 📷</div><div id="gateNext" style="color:#11803f"></div>';
     document.body.appendChild(gate);
     $('gateLogo').src = LOGO_SRC;
+    // 이용 기한 표시 (schedule.json 의 남은 시간표에서 만든다)
+    const dayKo = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8)}일(${'일월화수목금토'[new Date(d + 'T00:00:00Z').getUTCDay()]})`;
+    const paintPeriod = () => {
+      const el = $('period'), n = kstNow(), key = ymd(n) + hhmm(n);
+      const rest = OPEN_WINDOWS.filter((w) => w.date + w.to > key).sort((a, b) => (a.date + a.to).localeCompare(b.date + b.to));
+      if (!loaded || !rest.length) { el.hidden = true; return; }
+      const last = rest[rest.length - 1], cur = rest.find((w) => w.date + w.from <= key);
+      let t = `⏰ 이용 기한: ${dayKo(last.date)} ${last.to}까지`;
+      if (cur && cur !== last && cur.to !== '23:59') t += ` (지금은 ${cur.to}까지)`;
+      el.textContent = t; el.hidden = false;
+    };
     const apply = () => {
+      paintPeriod();
       const open = isOpen();
       gate.hidden = open; $('gateNext').textContent = loaded ? nextText() : '연결을 확인하고 있어요. 잠시 후 다시 시도해 주세요';
       if (open && wasOpen !== true && state.mode === 'shoot') startCamera();
