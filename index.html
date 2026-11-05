@@ -80,6 +80,7 @@
   #fsImg { height: 94vh; width: auto; max-width: 46vw; object-fit: contain; border-radius: 10px; box-shadow: 0 6px 30px rgba(0,0,0,.5); margin: 0 !important; }
   #fsView .fsq { display: flex; flex-direction: column; align-items: center; gap: 2vh; text-align: center; max-width: 44vw; }
   #fsQr svg { width: min(62vh, 38vw); height: auto; display: block; background: #fff; padding: 2.4vh; border-radius: 14px; }
+  #fsPeriod { margin: 0; font-size: clamp(16px, 3vh, 30px); font-weight: 800; color: #ff8d95; }
   #fsMsg { margin: 0; font-size: clamp(18px, 3.4vh, 34px); font-weight: 700; }
   #fsSub { margin: 0; font-size: clamp(13px, 2.2vh, 20px); color: #b9cbbf; line-height: 1.5; }
   #fsView .btn { flex: 0 0 auto; padding: 1.6vh 3vw; font-size: clamp(15px, 2.4vh, 22px); }
@@ -197,6 +198,7 @@
     <img id="fsImg" alt="완성된 네컷 사진">
     <div class="fsq">
       <div id="fsQr"></div>
+      <p id="fsPeriod" hidden></p>
       <p id="fsMsg"></p>
       <p id="fsSub"></p>
       <button class="btn primary" id="fsRetake" type="button">↩ 다시하기</button>
@@ -697,7 +699,7 @@
 
   // ---------- 공유 전체화면 (사진 + QR) ----------
   const fsV = $('fsView');
-  const syncFs = () => { $('fsQr').innerHTML = $('qrImg').innerHTML; $('fsMsg').textContent = $('qrMsg').textContent; $('fsSub').textContent = $('qrSub').textContent; };
+  const syncFs = () => { const pe = $('period'); $('fsPeriod').textContent = pe.textContent; $('fsPeriod').hidden = pe.hidden || !pe.textContent; $('fsQr').innerHTML = $('qrImg').innerHTML; $('fsMsg').textContent = $('qrMsg').textContent; $('fsSub').textContent = $('qrSub').textContent; };
   let fsObs = null;
   function openFs() {
     $('fsImg').src = $('stripImg').src; syncFs(); fsV.hidden = false;
@@ -707,6 +709,7 @@
       fsObs.observe($('qrImg'), { childList: true, subtree: true });
       fsObs.observe($('qrMsg'), { childList: true, characterData: true, subtree: true });
       fsObs.observe($('qrSub'), { childList: true, characterData: true, subtree: true });
+      fsObs.observe($('period'), { childList: true, characterData: true, subtree: true, attributes: true });
     }
     try { const r = fsV.requestFullscreen && fsV.requestFullscreen(); if (r && r.catch) r.catch(() => { /* 전체화면을 못 켜도 화면 가득 보이게 둔다 */ }); } catch (e) { /* 지원 안 함 */ }
   }
