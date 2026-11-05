@@ -469,10 +469,17 @@
       g.drawImage(p, (p.width - sw) / 2, (p.height - sh) / 2, sw, sh, x - PAD, y - PAD, CW + PAD * 2, CH + PAD * 2);
     });
     g.drawImage(frameImg, 0, 0, SW, SH);
+    // 오른쪽 가장자리 띠에 작은 저작권 표기 (반시계 방향 90도, 아래에서 위로 읽힌다)
+    g.save(); g.translate(1049, 1465); g.rotate(-Math.PI / 2);
+    g.textAlign = 'left'; g.textBaseline = 'middle';
+    g.font = `italic 700 20px 'BithumbGothicOriginal', ${FONT}`; g.fillStyle = 'rgb(160,186,222)';
+    if ('letterSpacing' in g) g.letterSpacing = '1px';
+    g.fillText('ⓒKIM.JIN.HO', 0, 0); g.restore();
     return c;
   }
   async function buildStrip() {
     await frameReady;
+    try { await document.fonts.load("italic 700 20px 'BithumbGothicOriginal'"); } catch (e) { /* 글꼴을 못 불러도 기본 글꼴로 그린다 */ }
     state.strip = composeStrip();
     state.stripBlob = await new Promise((r) => state.strip.toBlob(r, 'image/png'));
   }
